@@ -1,3 +1,29 @@
+/*
+ * Copyright (C) 2014-2019 Amlogic, Inc. All rights reserved.
+ *
+ * All information contained herein is Amlogic confidential.
+ *
+ * This software is provided to you pursuant to Software License Agreement
+ * (SLA) with Amlogic Inc ("Amlogic"). This software may be used
+ * only in accordance with the terms of this agreement.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification is strictly prohibited without prior written permission from
+ * Amlogic.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -273,48 +299,29 @@ static int32_t _ipc_upack_number(struct SIPC_DataType * type, void * buf, int le
     return type->len;
 }
 
-static int32_t _ipc_pack_str(struct SIPC_DataType * type, void * buf, int len, va_list *va) {
-    (void)type;
-    char* ptr = va_arg(*va, char*);
-    int32_t tlen = snprintf(buf,len,"%s",ptr) + 1;
-    if (len < tlen)
-        tlen= SIPC_ERR_PARAM;
-    return tlen;
-}
-
-static int32_t _ipc_upack_str(struct SIPC_DataType * type, void * buf, int len, va_list *va) {
-    (void)type;
-    int32_t tlen = strnlen(buf,len)+1;
-    if (len < tlen)
-        return SIPC_ERR_PARAM;
-    char **pptr = va_arg(*va, char**);
-    *pptr = buf;
-    return tlen;
-}
-
 static int32_t _ipc_pack_pointer(struct SIPC_DataType * type, void * buf, int len, va_list *va) {
-    (void)type;
     void* ptr = va_arg(*va, void*);
-    int32_t tlen = va_arg(*va,int32_t);
+    int32_t tlen = type->type_id == SIPC_TYPE_ID(str) ? (ptr ? strlen(ptr) + 1 : 0) : va_arg(*va, int32_t);
     if ((tlen<0) || (len < tlen+4))
         return SIPC_ERR_PARAM;
     ((uint8_t*)buf)[0] = ((uint8_t*)&tlen)[3];
     ((uint8_t*)buf)[1] = ((uint8_t*)&tlen)[2];
     ((uint8_t*)buf)[2] = ((uint8_t*)&tlen)[1];
     ((uint8_t*)buf)[3] = ((uint8_t*)&tlen)[0];
-    memcpy((uint8_t*)buf+4,ptr,tlen);
+    if (tlen) memcpy((uint8_t *)buf + 4, ptr, tlen);
     return tlen+4;
 }
 
 static int32_t _ipc_upack_pointer(struct SIPC_DataType * type, void * buf, int len, va_list *va) {
-    (void)type;
     int32_t tlen = ((uint32_t)((uint8_t*)buf)[0] << 24) | ((uint32_t)((uint8_t*)buf)[1] << 16) | ((uint32_t)((uint8_t*)buf)[2] << 8) | ((uint32_t)((uint8_t*)buf)[3]);
     if ((tlen<0) && (len < tlen+4))
         return SIPC_ERR_PARAM;
     void ** ptr = va_arg(*va, void**);
-    int32_t * plen = va_arg(*va, int32_t*);
     *ptr = tlen ? buf + 4 : NULL;
-    *plen = tlen;
+    if (type->type_id == SIPC_TYPE_ID(ptr)) {
+        int32_t * plen = va_arg(*va, int32_t*);
+        *plen = tlen;
+    }
     return tlen+4;
 }
 
@@ -328,7 +335,7 @@ static struct SIPC_DataType g_ipc_buildin_types[] = {
     {SIPC_TYPE_ID(u32),4,_ipc_pack_number,_ipc_upack_number,0},
     {SIPC_TYPE_ID(i64),8,_ipc_pack_number,_ipc_upack_number,0},
     {SIPC_TYPE_ID(u64),8,_ipc_pack_number,_ipc_upack_number,0},
-    {SIPC_TYPE_ID(str),4,_ipc_pack_str,_ipc_upack_str,0},
+    {SIPC_TYPE_ID(str),4,_ipc_pack_pointer,_ipc_upack_pointer,0},
     {SIPC_TYPE_ID(ptr),4,_ipc_pack_pointer,_ipc_upack_pointer,0},
 };
 
