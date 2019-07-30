@@ -40,6 +40,7 @@
 
 #include <stdarg.h>
 #include <stdint.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -76,16 +77,16 @@ extern "C" {
  * and compiler, such as int, long, use int32_t, int64_t instead
  */
 // build-in types
-#define SIPC_DEFINE_TYPE_i8 (int),0x01,"\x01"
-#define SIPC_DEFINE_TYPE_u8 (int),0x02,"\x02"
-#define SIPC_DEFINE_TYPE_i16 (int),0x03,"\x03"
-#define SIPC_DEFINE_TYPE_u16 (int),0x04,"\x04"
-#define SIPC_DEFINE_TYPE_i32 (int32_t),0x05,"\x05"
-#define SIPC_DEFINE_TYPE_u32 (uint32_t),0x06,"\x06"
-#define SIPC_DEFINE_TYPE_i64 (int64_t),0x07,"\x07"
-#define SIPC_DEFINE_TYPE_u64 (uint64_t),0x08,"\x08"
-#define SIPC_DEFINE_TYPE_str (char*),0x09,"\x09"
-#define SIPC_DEFINE_TYPE_ptr (void*,int32_t),0x0a,"\x0a"
+#define SIPC_DEFINE_TYPE_i8 (int),0x01
+#define SIPC_DEFINE_TYPE_u8 (int),0x02
+#define SIPC_DEFINE_TYPE_i16 (int),0x03
+#define SIPC_DEFINE_TYPE_u16 (int),0x04
+#define SIPC_DEFINE_TYPE_i32 (int32_t),0x05
+#define SIPC_DEFINE_TYPE_u32 (uint32_t),0x06
+#define SIPC_DEFINE_TYPE_i64 (int64_t),0x07
+#define SIPC_DEFINE_TYPE_u64 (uint64_t),0x08
+#define SIPC_DEFINE_TYPE_str (char*),0x09
+#define SIPC_DEFINE_TYPE_ptr (void*,int32_t),0x0a
 
 // type alias
 #define SIPC_DEFINE_TYPE_int8_t SIPC_DEFINE_TYPE_i8
@@ -110,7 +111,6 @@ extern "C" {
 
 #define SIPC_TYPE_CTYPE(t) MACRO_CALL(MACRO_GET_16,dummy,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,SIPC_DEFINE_TYPE_##t)
 #define SIPC_TYPE_ID(t) MACRO_CALL(MACRO_GET_16,dummy,1,2,3,4,5,6,7,8,9,10,11,12,13,14,SIPC_DEFINE_TYPE_##t)
-#define SIPC_TYPE_SID(t) MACRO_CALL(MACRO_GET_16,dummy,1,2,3,4,5,6,7,8,9,10,11,12,13,SIPC_DEFINE_TYPE_##t)
 
 #define MACRO_RECURSE_0(I,E,...)
 #define MACRO_RECURSE_1(I,E,_1,...) E(_1)
@@ -142,58 +142,124 @@ extern "C" {
 #define SIPC_GEN_ARG_LIST(a,...) ,a MACRO_CAT2(_,MACRO_NARG(__VA_ARGS__))
 #define SIPC_GEN_PARAM_LIST(a,...) ,MACRO_CAT2(_,MACRO_NARG(__VA_ARGS__))
 #define SIPC_GEN_PARAM_REF_LIST(a,...) ,&MACRO_CAT2(_,MACRO_NARG(__VA_ARGS__))
-#define SIPC_GEN_PARAM_STRID(a,...) SIPC_TYPE_SID(a)
+#define SIPC_GEN_PARAM_TYPEID(a,...) SIPC_TYPE_ID(a),
 #define SIPC_GEN_DECLARE_LIST(a,...) a MACRO_CAT2(_,MACRO_NARG(__VA_ARGS__));
+#define SIPC_GEN_ARG_PLIST(a,...) ,a * MACRO_CAT2(_p,MACRO_NARG(__VA_ARGS__))
+#define SIPC_GEN_PARAM_PLIST(a,...) ,MACRO_CAT2(_p,MACRO_NARG(__VA_ARGS__))
 // generate parameter-list: a,b -> , ctype_a _1 ,ctype_b _2
 #define SIPC_EXPAND_ARG_LIST(...) MACRO_CALL(MACRO_MAP,SIPC_GEN_ARG_LIST,SIPC_EXPAND_CTYPE_LIST(__VA_ARGS__))
 // generate list of declarator: a,b -> , _1 , _2
 #define SIPC_EXPAND_PARAM_LIST(...) MACRO_CALL(MACRO_MAP,SIPC_GEN_PARAM_LIST,SIPC_EXPAND_CTYPE_LIST(__VA_ARGS__))
 // generate address of declarator list: a,b -> , &_1 , &_2
 #define SIPC_EXPAND_PARAM_REF_LIST(...) MACRO_CALL(MACRO_MAP,SIPC_GEN_PARAM_REF_LIST,SIPC_EXPAND_CTYPE_LIST(__VA_ARGS__))
-// generate typeid string: a,b -> SIPC_TYPE_SID_a SIPC_TYPE_SID_b
-#define SIPC_EXPAND_PARAM_STRID(...) MACRO_MAP(SIPC_GEN_PARAM_STRID,##__VA_ARGS__)
+// generate typeid array: a,b -> SIPC_TYPE_ID_a, SIPC_TYPE_ID_b,
+#define SIPC_EXPAND_PARAM_TYPEID(...) MACRO_MAP(SIPC_GEN_PARAM_TYPEID,##__VA_ARGS__)
 // generate declaration-list: a,b -> SIPC_a _1; SIPC_b _2;
 #define SIPC_EXPAND_PARAM_DECLARE_LIST(...) MACRO_CALL(MACRO_MAP,SIPC_GEN_DECLARE_LIST,SIPC_EXPAND_CTYPE_LIST(__VA_ARGS__))
+// generate parameter-pointer list: a,b -> , ctype_a * _1 ,ctype_b * _2
+#define SIPC_EXPAND_ARG_PLIST(...) MACRO_CALL(MACRO_MAP,SIPC_GEN_ARG_PLIST,SIPC_EXPAND_CTYPE_LIST(__VA_ARGS__))
+// generate list of declarator: a,b -> , _p1 , _p2
+#define SIPC_EXPAND_PARAM_PLIST(...) MACRO_CALL(MACRO_MAP,SIPC_GEN_PARAM_PLIST,SIPC_EXPAND_CTYPE_LIST(__VA_ARGS__))
 
 #define SIPC_FUNCTION(n) g_ipc_func_##n
 
-#ifdef SIPC_IMPLEMENTATION
-#define DECLARE_IPC_FUNCTION(handle,...) \
+#define _DECLARE_IPC_FUNCTION(handle,...)\
+    extern SIPC_Function * g_ipc_func_##handle;\
+    extern int32_t call_##handle(SIPC_Peer ipc SIPC_EXPAND_ARG_LIST(__VA_ARGS__));
+#define _DECLARE_IPC_FUNCTION_SYNC(handle,argfmt,retfmt)\
+    extern SIPC_Function * g_ipc_func_##handle;\
+    extern int32_t call_##handle(SIPC_Peer ipc SIPC_EXPAND_ARG_LIST argfmt SIPC_EXPAND_ARG_PLIST retfmt);
+#define _DECLARE_IPC_EXPORT(handle,...)\
     extern SIPC_Function * g_ipc_func_##handle;\
     extern int32_t call_##handle(SIPC_Peer ipc SIPC_EXPAND_ARG_LIST(__VA_ARGS__));\
-    static SIPC_Function _ipc_imp_func_##handle = {#handle, (void*)0, "" SIPC_EXPAND_PARAM_STRID(__VA_ARGS__)};\
+    extern int32_t on_##handle(SIPC_Peer ipc SIPC_EXPAND_ARG_LIST(__VA_ARGS__));
+#define _DECLARE_IPC_EXPORT_SYNC(handle,argfmt,retfmt)\
+    extern SIPC_Function * g_ipc_func_##handle;\
+    extern int32_t call_##handle(SIPC_Peer ipc SIPC_EXPAND_ARG_LIST argfmt SIPC_EXPAND_ARG_PLIST retfmt);\
+    extern int32_t on_##handle(SIPC_Peer ipc SIPC_EXPAND_ARG_LIST argfmt);\
+    extern int32_t resp_##handle(SIPC_Peer ipc SIPC_EXPAND_ARG_LIST retfmt);
+
+#define _IMPLEMENT_IPC_FUNCTION(handle,...) \
+    _DECLARE_IPC_FUNCTION(handle,##__VA_ARGS__)\
+    static int32_t _typeid_call_##handle[] = {SIPC_EXPAND_PARAM_TYPEID(__VA_ARGS__) 0};\
+    static SIPC_Function _ipc_imp_func_##handle = {#handle, (void*)0, _typeid_call_##handle, NULL};\
     SIPC_Function *g_ipc_func_##handle __attribute__((section("ipc_function_import_table"))) = &_ipc_imp_func_##handle;\
     int32_t call_##handle(SIPC_Peer ipc SIPC_EXPAND_ARG_LIST(__VA_ARGS__)) {\
         return ipc_call_fmt(ipc, SIPC_FUNCTION(handle) SIPC_EXPAND_PARAM_LIST(__VA_ARGS__));\
     }
-#else
-#define DECLARE_IPC_FUNCTION(handle,...)\
-    extern SIPC_Function * g_ipc_func_##handle;\
-    extern int32_t call_##handle(SIPC_Peer ipc SIPC_EXPAND_ARG_LIST(__VA_ARGS__));
-#endif
+#define _IMPLEMENT_IPC_FUNCTION_SYNC(handle,argfmt,retfmt)\
+    _DECLARE_IPC_FUNCTION_SYNC(handle,argfmt,retfmt)\
+    static int32_t _typeid_call_##handle[] = {SIPC_EXPAND_PARAM_TYPEID argfmt 0};\
+    static int32_t _typeid_ret_##handle[] = {SIPC_EXPAND_PARAM_TYPEID retfmt 0};\
+    static SIPC_Function _ipc_imp_func_##handle = {#handle, (void*)0, _typeid_call_##handle, _typeid_ret_##handle};\
+    SIPC_Function *g_ipc_func_##handle __attribute__((section("ipc_function_import_table"))) = &_ipc_imp_func_##handle;\
+    int32_t call_##handle(SIPC_Peer ipc SIPC_EXPAND_ARG_LIST argfmt SIPC_EXPAND_ARG_PLIST retfmt) {\
+        return ipc_call_fmt(ipc, SIPC_FUNCTION(handle) SIPC_EXPAND_PARAM_LIST argfmt SIPC_EXPAND_PARAM_PLIST retfmt);\
+    }
 
-#define EXPORT_IPC_FUNCTION(handle,...) \
-    extern int32_t on_##handle(SIPC_Peer ipc SIPC_EXPAND_ARG_LIST(__VA_ARGS__));\
+#define _IMPLEMENT_IPC_EXPORT(handle,...) \
+    _DECLARE_IPC_EXPORT(handle,##__VA_ARGS__)\
+    static int32_t _typeid_call_##handle[] = {SIPC_EXPAND_PARAM_TYPEID(__VA_ARGS__) 0};\
     static int32_t _ipc_handle_##handle(SIPC_Peer ipc, void * buf, int len) {\
         SIPC_EXPAND_PARAM_DECLARE_LIST(__VA_ARGS__) \
-        int32_t r = ipc_upack_args(buf,len,SIPC_EXPAND_PARAM_STRID(__VA_ARGS__) "" SIPC_EXPAND_PARAM_REF_LIST(__VA_ARGS__));\
+        int32_t r = ipc_upack_args(buf,len,_typeid_call_##handle SIPC_EXPAND_PARAM_REF_LIST(__VA_ARGS__));\
         if (r >= 0) \
             r = on_##handle(ipc SIPC_EXPAND_PARAM_LIST(__VA_ARGS__)); \
         return r;\
     }\
-    static SIPC_Function _ipc_exp_func_##handle = {#handle, _ipc_handle_##handle, "" SIPC_EXPAND_PARAM_STRID(__VA_ARGS__)};\
-    SIPC_Function *g_ipc_exp_func_##handle __attribute__((section("ipc_function_export_table"))) = &_ipc_exp_func_##handle;\
+    static SIPC_Function _ipc_exp_func_##handle = {#handle, _ipc_handle_##handle, _typeid_call_##handle, NULL};\
+    SIPC_Function *g_ipc_func_##handle __attribute__((section("ipc_function_export_table"))) = &_ipc_exp_func_##handle;\
+    int32_t call_##handle(SIPC_Peer ipc SIPC_EXPAND_ARG_LIST(__VA_ARGS__)) {\
+        return ipc_call_fmt(ipc, SIPC_FUNCTION(handle) SIPC_EXPAND_PARAM_LIST(__VA_ARGS__));\
+    }
+#define _IMPLEMENT_IPC_EXPORT_SYNC(handle,argfmt,retfmt) \
+    _DECLARE_IPC_EXPORT_SYNC(handle,argfmt,retfmt)\
+    static int32_t _typeid_call_##handle[] = {SIPC_EXPAND_PARAM_TYPEID argfmt 0};\
+    static int32_t _typeid_ret_##handle[] = {SIPC_EXPAND_PARAM_TYPEID retfmt 0};\
+    static int32_t _ipc_handle_##handle(SIPC_Peer ipc, void * buf, int len) {\
+        SIPC_EXPAND_PARAM_DECLARE_LIST argfmt \
+        int32_t r = ipc_upack_args(buf,len,_typeid_call_##handle SIPC_EXPAND_PARAM_REF_LIST argfmt);\
+        if (r >= 0) \
+            r = on_##handle(ipc SIPC_EXPAND_PARAM_LIST argfmt);\
+        if (r != SIPC_NO_ERR) { \
+            r = ipc_resp_fmt(ipc, NULL, r);\
+        } \
+        return r;\
+    }\
+    int32_t resp_##handle(SIPC_Peer ipc SIPC_EXPAND_ARG_LIST retfmt) {\
+        return ipc_resp_fmt(ipc, _typeid_ret_##handle, SIPC_NO_ERR SIPC_EXPAND_PARAM_LIST retfmt);\
+    }\
+    static SIPC_Function _ipc_exp_func_##handle = {#handle, _ipc_handle_##handle, _typeid_call_##handle, _typeid_ret_##handle};\
+    SIPC_Function *g_ipc_func_##handle __attribute__((section("ipc_function_export_table"))) = &_ipc_exp_func_##handle;\
+    int32_t call_##handle(SIPC_Peer ipc SIPC_EXPAND_ARG_LIST argfmt SIPC_EXPAND_ARG_PLIST retfmt) {\
+        return ipc_call_fmt(ipc, SIPC_FUNCTION(handle) SIPC_EXPAND_PARAM_LIST argfmt SIPC_EXPAND_PARAM_PLIST retfmt);\
+    }
 
+#if defined(SIPC_IMPLEMENTATION)
+#define DECLARE_IPC_FUNCTION _IMPLEMENT_IPC_FUNCTION
+#define DECLARE_IPC_FUNCTION_SYNC _IMPLEMENT_IPC_FUNCTION_SYNC
+#define EXPORT_IPC_FUNCTION _IMPLEMENT_IPC_EXPORT
+#define EXPORT_IPC_FUNCTION_SYNC _IMPLEMENT_IPC_EXPORT_SYNC
+#else  // SIPC_IMPLEMENTATION
+#define DECLARE_IPC_FUNCTION _DECLARE_IPC_FUNCTION
+#define DECLARE_IPC_FUNCTION_SYNC _DECLARE_IPC_FUNCTION_SYNC
+#define EXPORT_IPC_FUNCTION _DECLARE_IPC_EXPORT
+#define EXPORT_IPC_FUNCTION_SYNC _DECLARE_IPC_EXPORT_SYNC
+#endif // SIPC_IMPLEMENTATION
+
+#define IPC_CALL(ipc,handle,...) call_##handle(ipc,##__VA_ARGS__)
+#define IPC_RESP(ipc,handle,...) resp_##handle(ipc,##__VA_ARGS__)
 
 typedef struct SIPC_HandleInternal* SIPC_Handle;
-typedef struct SIPC_PeerInternal* SIPC_Peer;
+typedef struct SIPC_HandleInternal* SIPC_Peer;
 typedef struct _SIPC_Function SIPC_Function;
 
 struct _SIPC_Function {
     const char * name;
     int32_t (*handle)(SIPC_Peer , void *, int );
-    const char * argfmt;
-    int call_id;
+    int32_t * argfmt;
+    int32_t * retfmt;
+    int32_t call_id;
     struct _SIPC_Function * next;
 };
 
@@ -213,10 +279,17 @@ struct SIPC_DataType {
 #define SIPC_ERR_NO_FUNC        -4
 #define SIPC_ERR_DUP_FUNC       -5
 #define SIPC_ERR_NO_IMPL        -6
+#define SIPC_ERR_TIMEOUT        -7
+#define SIPC_ERR_UNKNOWN        -8
 
-// create communication channel
+// default timeout for IPC call
+#define SIPC_DEFAULT_TIMEOUT    1000000*3
+// IPC message buffer size
+#define SIPC_MAX_MESSAGE_SIZE   1024*8
+
+// create an ipc channel that listen on bindaddr for incoming calls
 SIPC_Handle ipc_create_channel(const char * bindaddr);
-void ipc_stop_channel(SIPC_Handle serv);
+void ipc_close_channel(SIPC_Handle serv);
 // open a peer channel to make IPC call
 SIPC_Peer ipc_open_peer(SIPC_Handle serv, const char * remoteaddr);
 void ipc_close_peer(SIPC_Peer ipc);
@@ -229,31 +302,34 @@ int32_t ipc_exit_inner_loop(SIPC_Handle serv);
 int ipc_socket_getfd(SIPC_Handle serv);
 // call this function if select/poll success on the socket fd
 int32_t ipc_socket_handle(SIPC_Handle serv);
-// register function calls, the memory of SIPC_Function shall keep valid and untouched until ipc_socket_close
+// register function calls, the memory of SIPC_Function shall keep valid and untouched until ipc_close_channel
 int32_t ipc_register_call(SIPC_Handle serv, SIPC_Function * func);
+// set synchronous IPC call timeout, return previous timeout, default timeout is SIPC_DEFAULT_TIMEOUT
+int ipc_set_timeout(SIPC_Peer ipc, int us);
 // call IPC function with parameters
-int32_t ipc_call_va(SIPC_Peer ipc, SIPC_Function * func, va_list va);
+int32_t ipc_call_va(SIPC_Peer ipc, SIPC_Function * func, va_list* va);
 int32_t ipc_call_fmt(SIPC_Peer ipc, SIPC_Function * func, ...);
+// answer an IPC call
+int32_t ipc_resp_va(SIPC_Peer ipc, int32_t * fmt, va_list* va);
+int32_t ipc_resp_fmt(SIPC_Peer ipc, int32_t * fmt, ...);
 // pack and unpack IPC parameters
-int32_t ipc_pack_va(void * buf, int len, const char * fmt, va_list va);
-int32_t ipc_pack_args(void * buf, int len, const char * fmt, ...);
-int32_t ipc_upack_va(void * buf, int len, const char * fmt, va_list va);
-int32_t ipc_upack_args(void * buf, int len, const char * fmt, ...);
+int32_t ipc_pack_va(void * buf, int len, int32_t * fmt, va_list* va);
+int32_t ipc_pack_args(void * buf, int len, int32_t * fmt, ...);
+int32_t ipc_upack_va(void * buf, int len, int32_t * fmt, va_list* va);
+int32_t ipc_upack_args(void * buf, int len, int32_t * fmt, ...);
 
-DECLARE_IPC_FUNCTION(_call,i32,i32,str);
-DECLARE_IPC_FUNCTION(_local,i32,ptr);
-DECLARE_IPC_FUNCTION(_ping,ptr);
-DECLARE_IPC_FUNCTION(_ping_back,ptr);
+DECLARE_IPC_FUNCTION_SYNC(_call,(i32,i32,str),(i32));
+EXPORT_IPC_FUNCTION(_local,i32,ptr);
 
-#ifdef SIPC_IMPLEMENTATION
+#if defined(SIPC_IMPLEMENTATION)
 static int SIPC_LOG_LEVEL = -1;
 #define SIPC_LOG(lev,fmt, ...) do {\
-    if (lev<SIPC_LOG_LEVEL)\
-        printf(fmt "\n", ## __VA_ARGS__);\
-    else if (SIPC_LOG_LEVEL == -1) {\
+    if (SIPC_LOG_LEVEL < 0) {\
         const char * level = getenv("SIPC_LOG_LEVEL");\
         SIPC_LOG_LEVEL= level?atoi(level):2;\
     }\
+    if (lev<SIPC_LOG_LEVEL)\
+        printf(fmt "\n", ## __VA_ARGS__);\
 } while (0)
 #define SIPC_LOG0(fmt, ...) SIPC_LOG(0, fmt, ## __VA_ARGS__)
 #define SIPC_LOG1(fmt, ...) SIPC_LOG(1, fmt, ## __VA_ARGS__)
@@ -261,21 +337,17 @@ static int SIPC_LOG_LEVEL = -1;
 #define SIPC_LOG3(fmt, ...) SIPC_LOG(3, fmt, ## __VA_ARGS__)
 #define SIPC_LOG4(fmt, ...) SIPC_LOG(4, fmt, ## __VA_ARGS__)
 
-struct SIPC_PeerInternal {
-    int32_t client_id;
-    SIPC_Handle serv;
-    SIPC_Function * func_table;
-    struct sockaddr_un peer_addr;
-    SIPC_Peer next;
-};
-
 struct SIPC_HandleInternal {
-    int32_t server_id;
+    char buffer[SIPC_MAX_MESSAGE_SIZE];
+    struct sockaddr_un addr;
+    socklen_t addrlen;
+    int32_t ipc_id;
     int sockfd;
-    struct SIPC_PeerInternal self;
-    SIPC_Function * func_table;
-    SIPC_Peer peers;
     int loop_level;
+    int timeout_us;
+    SIPC_Function * func_table;
+    SIPC_Peer next;
+    SIPC_Handle serv;
 };
 
 static int32_t _ipc_pack_number(struct SIPC_DataType * type, void * buf, int len, va_list * va) {
@@ -339,22 +411,22 @@ static struct SIPC_DataType g_ipc_buildin_types[] = {
     {SIPC_TYPE_ID(ptr),4,_ipc_pack_pointer,_ipc_upack_pointer,0},
 };
 
-int32_t ipc_pack_args(void * buf, int len, const char * fmt, ...) {
+int32_t ipc_pack_args(void * buf, int len, int32_t * fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
-    int32_t r = ipc_pack_va(buf,len,fmt,ap);
+    int32_t r = ipc_pack_va(buf,len,fmt,&ap);
     va_end(ap);
     return r;
 }
 
-int32_t ipc_pack_va(void * buf, int len, const char * fmt, va_list va)
+int32_t ipc_pack_va(void * buf, int len, int32_t * fmt, va_list* va)
 {
     int tlen = 0;
     int32_t ret = 0;
-    int ch;
-    while ((ch=*fmt++)!='\0') {
+    int32_t ch;
+    while ((ch=*fmt++)!=0) {
         if ((ch >= SIPC_TYPE_ID(i8)) && (ch <= SIPC_TYPE_ID(ptr))) {
-            tlen = g_ipc_buildin_types[ch].pack(&g_ipc_buildin_types[ch], buf, len,&va);
+            tlen = g_ipc_buildin_types[ch].pack(&g_ipc_buildin_types[ch], buf, len, va);
         } else {
             SIPC_LOG1("TODO: customer type");
             tlen = SIPC_ERR_NO_IMPL;
@@ -368,22 +440,22 @@ int32_t ipc_pack_va(void * buf, int len, const char * fmt, va_list va)
     return ret;
 }
 
-int32_t ipc_upack_args(void * buf, int len, const char * fmt, ...) {
+int32_t ipc_upack_args(void * buf, int len, int32_t * fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
-    int32_t r = ipc_upack_va(buf,len,fmt,ap);
+    int32_t r = ipc_upack_va(buf,len,fmt,&ap);
     va_end(ap);
     return r;
 }
 
-int32_t ipc_upack_va(void * buf, int len, const char * fmt, va_list va)
+int32_t ipc_upack_va(void * buf, int len, int32_t * fmt, va_list* va)
 {
     int ch;
     int tlen = 0;
     int32_t ret = 0;
-    while ((ch=*fmt++)!='\0') {
+    while ((ch=*fmt++)!=0) {
         if ((ch >= SIPC_TYPE_ID(i8)) && (ch <= SIPC_TYPE_ID(ptr))) {
-            tlen = g_ipc_buildin_types[ch].upack(&g_ipc_buildin_types[ch], buf, len,&va);
+            tlen = g_ipc_buildin_types[ch].upack(&g_ipc_buildin_types[ch], buf, len,va);
         } else {
             SIPC_LOG1("TODO: customer type");
             tlen = SIPC_ERR_NO_IMPL;
@@ -405,22 +477,28 @@ SIPC_Handle ipc_create_channel(const char * bindaddr)
         goto error;
     }
     struct sockaddr_un addr;
+    socklen_t addrlen;
     addr.sun_family = AF_UNIX;
     if (bindaddr) {
-        snprintf(addr.sun_path, sizeof(addr.sun_path), "%s", bindaddr);
         unlink(bindaddr);
-        if (bind(unix_socket, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-            SIPC_LOG1("bind to %s fail %d %s", bindaddr, errno, strerror(errno));
-            goto error;
-        }
+        addrlen = snprintf(addr.sun_path, sizeof(addr.sun_path), "%s", bindaddr) + 1 + offsetof(struct sockaddr_un, sun_path);
+    } else {
+        addrlen = sizeof(sa_family_t);
+    }
+    if (bind(unix_socket, (struct sockaddr *)&addr, addrlen) < 0) {
+        SIPC_LOG1("bind to %s fail %d %s", bindaddr, errno, strerror(errno));
+        goto error;
     }
     struct SIPC_HandleInternal * serv = malloc(sizeof(*serv));
     memset(serv, 0, sizeof(*serv));
-    memcpy(&serv->self.peer_addr, &addr, sizeof(addr));
     serv->sockfd = unix_socket;
-    serv->peers = NULL;
-    serv->func_table = NULL;
-    serv->self.serv = serv;
+    serv->timeout_us = SIPC_DEFAULT_TIMEOUT;
+    serv->addrlen = sizeof(serv->addr);
+    if (getsockname(unix_socket, (struct sockaddr *)&serv->addr, &serv->addrlen)) {
+        SIPC_LOG1("getsockname fail %d %s", errno, strerror(errno));
+    } else {
+        SIPC_LOG1("bind to addr %.*s addrlen %d", serv->addrlen-3, &serv->addr.sun_path[1], serv->addrlen);
+    }
 
     return serv;
 
@@ -433,46 +511,54 @@ error:
 
 SIPC_Peer ipc_open_peer(SIPC_Handle serv, const char * remoteaddr)
 {
-    SIPC_Peer ipc = serv->peers;
-    for (; ipc; ipc=ipc->next) {
-        if (strcmp(ipc->peer_addr.sun_path, remoteaddr) == 0)
-            return ipc;
+    SIPC_Peer ipc;
+    if (serv) {
+        for (ipc=serv->next; ipc; ipc=ipc->next) {
+            if (strcmp(ipc->addr.sun_path, remoteaddr) == 0)
+                return ipc;
+        }
     }
-    ipc = malloc(sizeof(*ipc));
-    memset(ipc, 0, sizeof(*ipc));
-    ipc->serv = serv;
-    ipc->next = serv->peers;
-    ipc->peer_addr.sun_family = AF_UNIX;
-    snprintf(ipc->peer_addr.sun_path, sizeof(ipc->peer_addr.sun_path), "%s", remoteaddr);
-    serv->peers = ipc;
+    ipc = ipc_create_channel(NULL);
+    ipc->addr.sun_family = AF_UNIX;
+    ipc->addrlen = snprintf(ipc->addr.sun_path, sizeof(ipc->addr.sun_path), "%s", remoteaddr) + 1 + offsetof(struct sockaddr_un, sun_path);
+    if (serv) {
+        ipc->serv = serv;
+        ipc->next = serv->next;
+        serv->next = ipc;
+    }
     return ipc;
 }
 
 void ipc_close_peer(SIPC_Peer ipc)
 {
-    SIPC_Peer ch = ipc->serv->peers;
-    if (ch == ipc)
-        ipc->serv->peers = ch->next;
-    else if (ch) {
-        for (; ch->next; ch=ch->next) {
-            if (ch->next == ipc) {
-                ch->next = ipc->next;
-                break;
+    if (ipc->serv) {
+        SIPC_Handle ch = ipc->serv->next;
+        if (ch == ipc)
+            ipc->serv->next = ch->next;
+        else if (ch) {
+            for (; ch->next; ch=ch->next) {
+                if (ch->next == ipc) {
+                    ch->next = ipc->next;
+                    break;
+                }
             }
         }
+    }
+    if (ipc->sockfd >= 0) {
+        close(ipc->sockfd);
     }
     free(ipc);
 }
 
-void ipc_stop_channel(SIPC_Handle serv)
+void ipc_close_channel(SIPC_Handle serv)
 {
     if (serv->sockfd >= 0) {
         close(serv->sockfd);
         serv->sockfd = -1;
     }
-    while (serv->peers) {
-        SIPC_Peer ipc = serv->peers;
-        serv->peers = ipc->next;
+    while (serv->next) {
+        SIPC_Peer ipc = serv->next;
+        serv->next = ipc->next;
         ipc_close_peer(ipc);
     }
 }
@@ -490,22 +576,21 @@ int32_t ipc_run_loop(SIPC_Handle serv)
 int32_t ipc_exit_inner_loop(SIPC_Handle serv)
 {
     serv->loop_level--;
-    call__local(&serv->self,0,NULL,0);
+    call__local(serv,0,NULL,0);
     return 0;
 }
 
-int ipc_socket_getfd(SIPC_Handle serv)
-{
-    return serv->sockfd;
-}
+int ipc_socket_getfd(SIPC_Handle serv) { return serv->sockfd; }
 
 // clientid,callid,name
 int32_t ipc_socket_handle(SIPC_Handle serv)
 {
-    char buf[1024*8];
-    struct SIPC_PeerInternal tempChannel;
-    socklen_t addrlen = sizeof(tempChannel.peer_addr);
-    int len = recvfrom(serv->sockfd, buf, sizeof(buf), MSG_NOSIGNAL, (struct sockaddr *)&tempChannel.peer_addr, &addrlen);
+    char * buf = serv->buffer;
+    struct SIPC_HandleInternal tempChannel;
+    tempChannel.addrlen = sizeof(tempChannel.addr);
+    tempChannel.sockfd = serv->sockfd;
+    tempChannel.serv = serv;
+    int len = recvfrom(serv->sockfd, buf, SIPC_MAX_MESSAGE_SIZE, MSG_NOSIGNAL, (struct sockaddr *)&tempChannel.addr, &tempChannel.addrlen);
     int32_t client_id;
     int32_t call_id;
     char * name;
@@ -514,7 +599,7 @@ int32_t ipc_socket_handle(SIPC_Handle serv)
         SIPC_LOG2("data format error");
         return SIPC_ERR_DATA;
     }
-    SIPC_LOG3("received call %s %d bytes from %s", name, len, tempChannel.peer_addr.sun_path);
+    SIPC_LOG3("received call %s %d bytes from %.*s", name, len, tempChannel.addrlen-3, &tempChannel.addr.sun_path[1]);
     if (SIPC_LOG_LEVEL > 3) {
         int i;
         char msg[len*3 + 1], *p = msg;
@@ -528,11 +613,11 @@ int32_t ipc_socket_handle(SIPC_Handle serv)
         ipc = &tempChannel;
         ipc->serv = serv;
         ipc->next = NULL;
-        ipc->client_id = 0;
+        ipc->ipc_id = 0;
         ipc->func_table = NULL;
     } else {
-        for (ipc=serv->peers; ipc; ipc=ipc->next) {
-            if (ipc->client_id == client_id)
+        for (ipc=serv->next; ipc; ipc=ipc->next) {
+            if (ipc->ipc_id == client_id)
                 break;
         }
     }
@@ -579,11 +664,44 @@ int32_t ipc_register_call(SIPC_Handle serv, SIPC_Function * func)
     return 0;
 }
 
-int32_t ipc_call_va(SIPC_Peer ipc, SIPC_Function * func, va_list va)
+static int socket_have_data_to_read(int sockfd, int us)
 {
-    char buf[1024*8];
-    int len = sizeof(buf);
-    int len1 = ipc_pack_args(buf, len, SIPC_FUNCTION(_call)->argfmt, ipc->client_id, func->call_id, func->name);
+    struct timeval tv, *ptv;
+    fd_set rfds;
+    FD_ZERO(&rfds);
+    FD_SET(sockfd, &rfds);
+    if (us == -1) {
+        ptv = NULL;
+    } else {
+        ptv = &tv;
+        ptv->tv_sec = us / 1000000;
+        ptv->tv_usec = us % 1000000;
+    }
+    int retval;
+    do {
+       retval = select(sockfd+1, &rfds, NULL, NULL, ptv);
+    } while ((retval==-1) && (errno==EINTR));
+    return retval;
+}
+
+int32_t ipc_call_va(SIPC_Peer ipc, SIPC_Function * func, va_list* va)
+{
+#if 0
+    if (func->retfmt) {
+        struct sockaddr_un addr;
+        socklen_t addrlen = sizeof(addr);
+        // flush the socket
+        while (socket_have_data_to_read(ipc->sockfd, 0) > 0) {
+            int rlen = recvfrom(ipc->sockfd, ipc->buffer, sizeof(ipc->buffer), MSG_NOSIGNAL, (struct sockaddr *)&addr, &addrlen);
+            if (rlen > 0) {
+                SIPC_LOG1("drop %d bytes from %.*s", rlen, addrlen-3, &addr.sun_path[1]);
+            }
+        }
+    }
+#endif
+    char *buf = ipc->buffer;
+    int len = sizeof(ipc->buffer);
+    int len1 = ipc_pack_args(buf, len, SIPC_FUNCTION(_call)->argfmt, ipc->ipc_id, func->call_id, func->name);
     if (len1 <= 0) {
         SIPC_LOG2("call ipc_pack_args header failed");
         return len1;
@@ -593,8 +711,8 @@ int32_t ipc_call_va(SIPC_Peer ipc, SIPC_Function * func, va_list va)
         SIPC_LOG2("call ipc_pack_args params failed");
         return len2;
     }
-    int wlen = sendto(ipc->serv->sockfd, buf, len1+len2, MSG_NOSIGNAL, (struct sockaddr *)&ipc->peer_addr, sizeof(ipc->peer_addr));
-    SIPC_LOG3("call %s, send %d bytes to %s, return %d", func->name, len1+len2, ipc->peer_addr.sun_path, wlen);
+    int wlen = sendto(ipc->sockfd, buf, len1+len2, MSG_NOSIGNAL, (struct sockaddr *)&ipc->addr, ipc->addrlen);
+    SIPC_LOG3("call %s, send %d bytes to %.*s, return %d", func->name, len1+len2, ipc->addrlen-3, &ipc->addr.sun_path[1], wlen);
     if (SIPC_LOG_LEVEL > 3) {
         int i = len1+len2;
         char msg[i*3 + 1], *p = msg;
@@ -607,32 +725,84 @@ int32_t ipc_call_va(SIPC_Peer ipc, SIPC_Function * func, va_list va)
         SIPC_LOG2("send data fail %d != %d + %d, err %d %s", wlen, len1, len2, errno, strerror(errno));
         return SIPC_ERR_IO;
     }
-    return 0;
+    if (func->retfmt == NULL)
+        return SIPC_NO_ERR;
+    int r = socket_have_data_to_read(ipc->sockfd, ipc->timeout_us);
+    if (r > 0) {
+        struct sockaddr_un addr;
+        socklen_t addrlen = sizeof(addr);
+        int rlen = recvfrom(ipc->sockfd, ipc->buffer, sizeof(ipc->buffer), MSG_NOSIGNAL, (struct sockaddr *)&addr, &addrlen);
+        if (rlen <= 0) {
+            SIPC_LOG2("call %s, response len %d", func->name, rlen);
+            r = SIPC_ERR_IO;
+        } else {
+            SIPC_LOG3("receive %d bytes from %.*s", rlen, addrlen-3, &addr.sun_path[1]);
+            if (SIPC_LOG_LEVEL > 3) {
+                int i = rlen;
+                char msg[i*3 + 1], *p = msg;
+                for (i=0; i<rlen; ++i) {
+                    p += sprintf(p, "%02x ", (uint8_t)ipc->buffer[i]);
+                }
+                SIPC_LOG4("%s",msg);
+            }
+            len1 = ipc_upack_args(ipc->buffer, rlen, SIPC_FUNCTION(_call)->retfmt, &r);
+            if (r == SIPC_NO_ERR) {
+                len2 = ipc_upack_va(ipc->buffer+len1, rlen-len1, func->retfmt, va);
+            }
+            SIPC_LOG3("call %s return %d", func->name, r);
+        }
+    } else if (r == 0) {
+        SIPC_LOG2("call %s response timeout", func->name);
+        r = SIPC_ERR_TIMEOUT;
+    } else {
+        SIPC_LOG2("call %s, failed to get response", func->name);
+        r = SIPC_ERR_UNKNOWN;
+    }
+    return r;
 }
 
 int32_t ipc_call_fmt(SIPC_Peer ipc, SIPC_Function * func, ...) {
     va_list ap;
     va_start(ap, func);
-    int32_t r = ipc_call_va(ipc,func,ap);
+    int32_t r = ipc_call_va(ipc,func,&ap);
     va_end(ap);
     return r;
 }
 
-EXPORT_IPC_FUNCTION(_local,i32,ptr);
-EXPORT_IPC_FUNCTION(_ping,ptr);
-EXPORT_IPC_FUNCTION(_ping_back,ptr);
-
-int32_t on__ping(SIPC_Peer ipc, void * data, int32_t len)
-{
-    SIPC_LOG3("client %p ping %p %d", ipc, data, len);
-    call__ping_back(ipc, data, len);
-    return 0;
+int32_t ipc_resp_va(SIPC_Peer ipc, int32_t * fmt, va_list* va) {
+    int len1 = ipc_pack_va(ipc->buffer, sizeof(ipc->buffer), SIPC_FUNCTION(_call)->retfmt, va);
+    if (len1 <= 0) {
+        SIPC_LOG2("call ipc_pack_args header failed");
+        return len1;
+    }
+    int len2 = fmt ? ipc_pack_va(ipc->buffer + len1, sizeof(ipc->buffer) - len1, fmt, va) : 0;
+    if (len2 < 0) {
+        SIPC_LOG2("call ipc_pack_args params failed");
+        return len2;
+    }
+    int wlen = sendto(ipc->sockfd, ipc->buffer, len1+len2, MSG_NOSIGNAL, (struct sockaddr *)&ipc->addr, ipc->addrlen);
+    SIPC_LOG3("send %d bytes to %.*s, return %d", len1+len2, ipc->addrlen-3, &ipc->addr.sun_path[1], wlen);
+    if (SIPC_LOG_LEVEL > 3) {
+        int i = len1+len2;
+        char msg[i*3 + 1], *p = msg;
+        for (i=0; i<len1+len2; ++i) {
+            p += sprintf(p, "%02x ", (uint8_t)ipc->buffer[i]);
+        }
+        SIPC_LOG4("%s",msg);
+    }
+    if (wlen != len1+len2) {
+        SIPC_LOG2("send data fail %d != %d + %d, err %d %s", wlen, len1, len2, errno, strerror(errno));
+        return SIPC_ERR_IO;
+    }
+    return SIPC_NO_ERR;
 }
 
-int32_t on__ping_back(SIPC_Peer ipc, void * data, int32_t len)
-{
-    SIPC_LOG3("client %p ping back %p %d", ipc, data, len);
-    return 0;
+int32_t ipc_resp_fmt(SIPC_Peer ipc, int32_t * fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    int32_t r = ipc_resp_va(ipc,fmt,&ap);
+    va_end(ap);
+    return r;
 }
 
 int32_t on__local(SIPC_Peer ipc, int32_t cmd, void * data, int32_t len)
@@ -641,7 +811,11 @@ int32_t on__local(SIPC_Peer ipc, int32_t cmd, void * data, int32_t len)
     return 0;
 }
 
-
+int ipc_set_timeout(SIPC_Peer ipc, int us) {
+    int old = ipc->timeout_us;
+    ipc->timeout_us = us;
+    return old;
+}
 
 #endif
 
